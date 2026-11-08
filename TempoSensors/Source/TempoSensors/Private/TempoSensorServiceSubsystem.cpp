@@ -264,6 +264,10 @@ void UTempoSensorServiceSubsystem::WaitForDecodesInFlight()
 		Decode.Value.Wait();
 	}
 	DecodesInFlight.Empty();
+	ForEachActiveSensor([](ITempoSensorInterface* Sensor)
+	{
+		Sensor->WaitForDecodes();
+	});
 }
 
 void UTempoSensorServiceSubsystem::OnBetweenFramesPoll(UWorld* World)
