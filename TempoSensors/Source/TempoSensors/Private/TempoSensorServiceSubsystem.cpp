@@ -16,6 +16,7 @@
 #include "TempoWorldSettings.h"
 #include "TempoServer.h"
 
+#include "Algo/StableSort.h"
 #include "Components/SceneCaptureComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
@@ -149,6 +150,27 @@ void UTempoSensorServiceSubsystem::OnWorldTickEnd(UWorld* World, ELevelTick Tick
 	{
 		Sensors.Add(Sensor);
 	});
+
+	// The captures render one after another on the GPU, which starts on a capture only once the render thread has
+	// recorded all of it. Record the cameras with the fewest views first: the GPU starts sooner and stays fed while
+	// the larger ones are recorded, so the frame's last camera completes earlier. Other sensors keep their places.
+	{
+		TArray<int32> CameraSlots;
+		TArray<UTempoCamera*> Cameras;
+		for (int32 Index = 0; Index < Sensors.Num(); ++Index)
+		{
+			if (UTempoCamera* Camera = Cast<UTempoCamera>(Sensors[Index]->_getUObject()))
+			{
+				CameraSlots.Add(Index);
+				Cameras.Add(Camera);
+			}
+		}
+		Algo::StableSortBy(Cameras, [](const UTempoCamera* Camera) { return Camera->GetNumCaptureViews(); });
+		for (int32 Slot = 0; Slot < CameraSlots.Num(); ++Slot)
+		{
+			Sensors[CameraSlots[Slot]] = Cameras[Slot];
+		}
+	}
 
 	// Poll the readbacks ahead of this frame's captures and behind each one. A fence that signals while
 	// the render thread works through the captures is then read back between them. Otherwise a client
